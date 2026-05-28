@@ -1,0 +1,24 @@
+{
+  "server_url": "http://YOUR_SERVER_IP:PORT/morning",
+  "enabled_languages": ["ja"],
+  "refs": {
+    "ja": {
+      "audio": "ref/Civilight/audio/reference.wav",
+      "text": "ref/Civilight/text/reference.txt"
+    },
+    "zh": {
+      "audio": "",
+      "text": ""
+    },
+    "en": {
+      "audio": "",
+      "text": ""
+    }
+  },
+  "log_level": "INFO",
+  "top_k": 5,
+  "top_p": 1.0,
+  "temperature": 1.0,
+  "speed_factor": 1.00,
+  "parallel_infer": true
+}

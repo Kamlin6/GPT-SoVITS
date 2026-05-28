@@ -193,3 +193,10 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+#<yuri>
+Custom/characters/
+PIPELINE/
+config.json
+backlog.md
+#</yuri>
