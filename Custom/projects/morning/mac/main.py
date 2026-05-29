@@ -30,7 +30,7 @@ def main():
     text = runtime.preprocessor.process(text, lang)
     runtime.logger.info(f"[{lang}]  {text}")
 
-    audio, sr = runtime.tts_engine.generate(text, lang)
+    sr, audio = runtime.tts_engine.generate(text, lang)
 
     # ── 保存音频 ──
     import soundfile as sf
