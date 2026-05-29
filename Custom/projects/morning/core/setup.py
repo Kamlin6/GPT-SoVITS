@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from Custom.projects.morning.modules.text_provider import TextProvider
     from Custom.projects.morning.modules.tts_engine import TTSEngine
     from Custom.projects.morning.modules.relay import Relay
+    from Custom.projects.morning.modules.preprocessor import Preprocessor
 
 
 @dataclass
@@ -28,6 +29,7 @@ class Runtime:
     tts_engine: "TTSEngine"
     text_provider: "TextProvider"
     relay: "Relay"
+    preprocessor: "Preprocessor"
     logger: logging.Logger
 
 
@@ -54,15 +56,19 @@ def setup(config_path: str, root: Path) -> Runtime:
     from Custom.projects.morning.modules.text_provider import TextProvider
     from Custom.projects.morning.modules.tts_engine import TTSEngine
     from Custom.projects.morning.modules.relay import Relay
+    from Custom.projects.morning.modules.preprocessor import Preprocessor
 
     text_provider = TextProvider(config.enabled_languages, app_logger)
     tts_engine = TTSEngine(config)
     relay = Relay(config, app_logger)
+    dict_path = root / "ref" / "Civilight" / "custom_reading.yaml"
+    preprocessor = Preprocessor(str(dict_path), config.preprocessor_enabled, app_logger)
 
     return Runtime(
         config=config,
         tts_engine=tts_engine,
         text_provider=text_provider,
         relay=relay,
+        preprocessor=preprocessor,
         logger=app_logger,
     )

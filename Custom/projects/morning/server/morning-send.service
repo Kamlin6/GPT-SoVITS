@@ -1,0 +1,10 @@
+[Unit]
+Description=Morning Discord Send
+After=network-online.target
+RequiresMountsFor=/home/kambravolin/morning
+
+[Service]
+Type=oneshot
+User=kambravolin
+EnvironmentFile=/etc/morning-webhook.env
+ExecStart=/bin/bash /home/kambravolin/bin/server/morning-send.sh

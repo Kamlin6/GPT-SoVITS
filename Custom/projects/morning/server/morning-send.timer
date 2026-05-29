@@ -1,0 +1,10 @@
+[Unit]
+Description=Morning Send Timer
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -50,6 +50,13 @@ class MorningConfig:
     # ── 多语言 ──
     enabled_languages: list = field(default_factory=lambda: ["ja"])
 
+    # ── 预处理 ──
+    preprocessor_enabled: bool = True
+
+    # ── SCP 上传 ──
+    scp_host: str = ""
+    scp_remote_dir: str = ""
+
     @classmethod
     def from_json(cls, path: str) -> "MorningConfig":
         """从 config.json 加载，覆盖默认值。
@@ -98,6 +105,9 @@ class MorningConfig:
             "speed_factor": float,
             "parallel_infer": bool,
             "enabled_languages": list,
+            "preprocessor_enabled": bool,
+            "scp_host": str,
+            "scp_remote_dir": str,
         }
         for key, expected_type in type_hints.items():
             if key in raw and not isinstance(raw[key], expected_type):

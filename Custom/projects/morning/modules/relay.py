@@ -1,13 +1,15 @@
 """
-relay.py — HTTP 发送到服务器
+relay.py — HTTP 发送到服务器 / SCP 上传
 
 职责：
 - 保存音频到本地
-- POST 到服务器
+- HTTP POST 到服务器（旧管线）
+- SCP 上传到服务器（新管线）
 - 失败时记录 ERROR 日志，返回 False
 """
 
 import logging
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -21,7 +23,7 @@ logger = logging.getLogger("morning")
 
 
 class Relay:
-    """HTTP 中继器。负责保存音频并发送到服务器。"""
+    """中继器。支持 HTTP relay 和 SCP 上传。"""
 
     def __init__(self, config: MorningConfig, app_logger: logging.Logger):
         self.server_url = config.server_url
@@ -68,4 +70,41 @@ class Relay:
             return False
         except Exception as e:
             self.logger.error(f"Relay failed: {e}")
+            return False
+
+    def send_scp(self, wav_path: Path, text: str, config: MorningConfig, date_str: str) -> bool:
+        """SCP 上传 wav + txt 到服务器。
+
+        Args:
+            wav_path: 音频文件路径
+            text: 文本内容
+            config: MorningConfig（需要 scp_host, scp_remote_dir）
+            date_str: 日期字符串（YYYY-MM-DD）
+
+        Returns:
+            True 表示成功，False 表示失败
+        """
+        host = config.scp_host
+        remote_dir = config.scp_remote_dir
+
+        try:
+            # 上传 wav
+            subprocess.run(
+                ["scp", str(wav_path), f"{host}:{remote_dir}/{date_str}.wav"],
+                check=True, timeout=30)
+            self.logger.info(f"Uploaded {date_str}.wav")
+
+            # 上传 txt
+            txt_path = Path(wav_path).with_suffix(".txt")
+            txt_path.write_text(text, "utf-8")
+            subprocess.run(
+                ["scp", str(txt_path), f"{host}:{remote_dir}/{date_str}.txt"],
+                check=True, timeout=30)
+            self.logger.info(f"Uploaded {date_str}.txt")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            self.logger.error(f"SCP failed: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"SCP upload failed: {e}")
             return False

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 morning.py — Sprint 1: generate morning greeting TTS, relay to server
+DEPRECATED — 使用重构后的入口:
+
+    python Custom/projects/morning/mac/main.py
+
 Run from GPT-SoVITS root:
 
     python Custom/projects/morning/mac/morning.py
