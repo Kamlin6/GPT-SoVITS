@@ -26,7 +26,14 @@ from Custom.projects.morning.core.setup import setup
 def main():
     runtime = setup(str(CONFIG_PATH), ROOT)
     runtime.logger.info("Morning pipeline starting")
-    text, lang = runtime.text_provider.pick()
+
+    # LLM 生成 → 失败时降级到模板池
+    try:
+        text, lang = runtime.llm.generate()
+    except Exception as e:
+        runtime.logger.error(f"LLM generation failed: {e}, falling back to text provider")
+        text, lang = runtime.text_provider.pick()
+
     text = runtime.preprocessor.process(text, lang)
     runtime.logger.info(f"[{lang}]  {text}")
 
@@ -41,17 +48,9 @@ def main():
     sf.write(str(wav_path), audio, sr)
     runtime.logger.info(f"Saved: {wav_path}")
 
-    # ── 发送（SCP 优先，HTTP relay 作为降级）──
-    config = runtime.config
-    if config.scp_host:
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        success = runtime.relay.send_scp(wav_path, text, config, date_str)
-        if not success:
-            runtime.logger.warning("SCP failed; audio saved locally.")
-    else:
-        success = runtime.relay.send(audio, text, sr, config.output_dir)
-        if not success:
-            runtime.logger.warning("Relay to server failed, but audio was saved locally.")
+    # ── Delivery 分发 ──
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    runtime.switcher.deliver(wav_path, text, timestamp, date_str)
 
     runtime.logger.info("Done.")
 

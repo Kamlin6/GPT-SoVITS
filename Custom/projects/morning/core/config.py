@@ -9,12 +9,15 @@ config.py — MorningConfig: 中心环境变量定义处
 
 import json
 import logging
+import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("morning")
+
+VALID_DELIVERY_CHANNELS = {"icloud", "scp"}
 
 
 @dataclass
@@ -56,6 +59,14 @@ class MorningConfig:
     # ── SCP 上传 ──
     scp_host: str = ""
     scp_remote_dir: str = ""
+
+    # ── LLM ──
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_api_base: str = "https://api.openai.com/v1"
+
+    # ── Delivery ──
+    delivery_channels: list = field(default_factory=lambda: ["icloud"])
 
     @classmethod
     def from_json(cls, path: str) -> "MorningConfig":
@@ -108,6 +119,10 @@ class MorningConfig:
             "preprocessor_enabled": bool,
             "scp_host": str,
             "scp_remote_dir": str,
+            "llm_api_key": str,
+            "llm_model": str,
+            "llm_api_base": str,
+            "delivery_channels": list,
         }
         for key, expected_type in type_hints.items():
             if key in raw and not isinstance(raw[key], expected_type):
@@ -147,8 +162,36 @@ class MorningConfig:
                     default_refs[lang]["audio"] = lang_ref.get("audio", "")
                     default_refs[lang]["text"] = lang_ref.get("text", "")
 
+        # ── 提取 delivery_channels 并校验 ──
+        delivery_channels = raw.pop("delivery_channels", None)
+        if delivery_channels is not None:
+            if not isinstance(delivery_channels, list):
+                raise ValueError("'delivery_channels' must be a list")
+            for item in delivery_channels:
+                if not isinstance(item, str):
+                    raise ValueError(f"'delivery_channels' items must be strings, got {type(item).__name__}")
+            for item in delivery_channels:
+                if item not in VALID_DELIVERY_CHANNELS:
+                    raise ValueError(f"Unknown delivery channel: '{item}'. Valid: {VALID_DELIVERY_CHANNELS}")
+            if not delivery_channels:
+                raise ValueError("'delivery_channels' cannot be empty")
+        else:
+            delivery_channels = ["icloud"]
+
+        # ── 提取 llm_api_key，环境变量回退 ──
+        llm_api_key = raw.pop("llm_api_key", "")
+        if not llm_api_key:
+            llm_api_key = os.environ.get("MONICA_API_KEY", "")
+
         # ── 构建实例 ──
-        return cls(refs=default_refs, enabled_languages=enabled_languages, **{k: v for k, v in raw.items() if k in type_hints})
+        filtered = {k: v for k, v in raw.items() if k in type_hints}
+        return cls(
+            refs=default_refs,
+            enabled_languages=enabled_languages,
+            delivery_channels=delivery_channels,
+            llm_api_key=llm_api_key,
+            **filtered,
+        )
 
     def resolve_paths(self, root: Path) -> None:
         """将 config 中的相对路径解析为绝对路径。

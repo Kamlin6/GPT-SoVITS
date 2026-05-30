@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from Custom.projects.morning.modules.tts_engine import TTSEngine
     from Custom.projects.morning.modules.relay import Relay
     from Custom.projects.morning.modules.preprocessor import Preprocessor
+    from Custom.projects.morning.modules.llm_provider import LLMProvider
+    from Custom.projects.morning.modules.switcher import Switcher
 
 
 @dataclass
@@ -28,8 +30,10 @@ class Runtime:
     config: MorningConfig
     tts_engine: "TTSEngine"
     text_provider: "TextProvider"
+    llm: "LLMProvider"
     relay: "Relay"
     preprocessor: "Preprocessor"
+    switcher: "Switcher"
     logger: logging.Logger
 
 
@@ -57,6 +61,8 @@ def setup(config_path: str, root: Path) -> Runtime:
     from Custom.projects.morning.modules.tts_engine import TTSEngine
     from Custom.projects.morning.modules.relay import Relay
     from Custom.projects.morning.modules.preprocessor import Preprocessor
+    from Custom.projects.morning.modules.llm_provider import LLMProvider, LLMConfig
+    from Custom.projects.morning.modules.switcher import Switcher
 
     text_provider = TextProvider(config.enabled_languages, app_logger)
     tts_engine = TTSEngine(config)
@@ -64,11 +70,24 @@ def setup(config_path: str, root: Path) -> Runtime:
     dict_path = root / "ref" / "Civilight" / "custom_reading.yaml"
     preprocessor = Preprocessor(str(dict_path), config.preprocessor_enabled, app_logger)
 
+    llm_cfg = LLMConfig(
+        api_key=config.llm_api_key,
+        model=config.llm_model,
+        api_base=config.llm_api_base,
+        voice_lines_path=root / "Custom" / "characters" / "CIVILIGHT" / "corpus" / "voice_lines_jp.txt",
+        logger=app_logger,
+    )
+    llm = LLMProvider(llm_cfg)
+
+    switcher = Switcher(config.delivery_channels, relay, app_logger)
+
     return Runtime(
         config=config,
         tts_engine=tts_engine,
         text_provider=text_provider,
+        llm=llm,
         relay=relay,
         preprocessor=preprocessor,
+        switcher=switcher,
         logger=app_logger,
     )
