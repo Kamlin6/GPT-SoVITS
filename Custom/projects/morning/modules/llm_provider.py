@@ -2,20 +2,24 @@
 llm_provider.py — LLM 文本生成模块
 
 职责：
-- 调用 GPT-4o-mini (Monica API) 生成每日唯一早安文本
+- 调用 GPT-4o-mini (Monica API) 生成每日唯一早安/晚安文本
+- 支持 mode 参数（morning/goodnight），日期自动修正
 - 加载 voice_lines_jp.txt 注入 system prompt
+- 集成元素池（PoolSelector）增强代入感
 - 失败时向上抛异常，由 main.py 降级到 text_provider.pick()
 """
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, timedelta
 from pathlib import Path
 
 import requests
 
+from Custom.projects.morning.modules.pool_selector import PoolSelector
 
-SYSTEM_PROMPT = """# あなたは Civilight Eterna（テレシア）
+
+CHARACTER_SETTING = """# あなたは Civilight Eterna（テレシア）
 
 ## 設定
 あなたは「明日方舟（アークナイツ）」に登場するテレシア。
@@ -43,6 +47,9 @@ SYSTEM_PROMPT = """# あなたは Civilight Eterna（テレシア）
 - 過去に共に戦った戦友であり、深い信頼と愛情がある
 - 罪悪感を背負っている博士を優しく肯定する
 - 「私はここにいる」という安心感を与える
+"""
+
+SYSTEM_PROMPT_MORNING = CHARACTER_SETTING + """
 
 ## 話し方のルール
 - 常に敬語ではなく、親しみのある丁寧語（です・ます調）
@@ -59,6 +66,24 @@ SYSTEM_PROMPT = """# あなたは Civilight Eterna（テレシア）
 ---
 """
 
+SYSTEM_PROMPT_GOODNIGHT = CHARACTER_SETTING + """
+
+## 話し方のルール
+- 常に敬語ではなく、親しみのある丁寧語（です・ます調）
+- 2〜3文でまとめる
+- 博士の一日の労いをねぎらい、安らかな眠りを願う
+- 説教じみない、急かさない
+- 出力は日本語テキストのみ。説明や引用符は一切つけない
+- 以下の参考セリフ集の語彙と口調を厳密に守ってください
+
+## 参考にするセリフ集
+以下はテレシアが実際に話したセリフです。
+この語彙と口調を厳密に守って、新しい晚安の挨拶を作ってください。
+---
+{voice_lines}
+---
+"""
+
 
 @dataclass
 class LLMConfig:
@@ -67,11 +92,12 @@ class LLMConfig:
     model: str
     api_base: str
     voice_lines_path: Path
+    pools_db_path: Path
     logger: logging.Logger
 
 
 class LLMProvider:
-    """LLM 早安文本生成器"""
+    """LLM 早安/晚安文本生成器"""
 
     _WEEKDAY_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
 
@@ -95,25 +121,61 @@ class LLMProvider:
             voice_lines = "\n".join(lines)
             self.logger.info(f"Loaded voice_lines: {cfg.voice_lines_path} ({len(lines)} lines)")
         else:
-            voice_lines = "（まだセリフ集が登録されていません。テレシアの口調で自然な朝の挨拶を作ってください。）"
+            voice_lines = "（まだセリフ集が登録されていません。テレシアの口調で自然な挨拶を作ってください。）"
             self.logger.warning(f"voice_lines not found: {cfg.voice_lines_path}")
 
-        self.system_prompt = SYSTEM_PROMPT.format(voice_lines=voice_lines)
+        self.system_prompt_morning = SYSTEM_PROMPT_MORNING.format(voice_lines=voice_lines)
+        self.system_prompt_goodnight = SYSTEM_PROMPT_GOODNIGHT.format(voice_lines=voice_lines)
 
-    def generate(self) -> tuple[str, str]:
+        # 初始化元素池
+        self.pool_selector = PoolSelector(cfg.pools_db_path, self.logger)
+
+    def generate(self, mode: str = "morning") -> tuple[str, str]:
         """
-        生成今日の朝の挨拶。
+        生成今日の朝/晚安の挨拶。
+
+        Args:
+            mode: "morning" 或 "goodnight"
 
         Returns:
             (text, language) — language 固定为 "ja"
         """
-        now = datetime.now()
-        weekday = self._WEEKDAY_JA[now.weekday()]
-        date_str = now.strftime("%Y年%m月%d日")
+        # ── 日期计算 ──
+        if mode == "morning":
+            target_date = date.today() + timedelta(days=1)
+            weekday = self._WEEKDAY_JA[target_date.weekday()]
+            date_str = target_date.strftime("%Y年%m月%d日")
+            base_msg = f"明日は{weekday}、{date_str}です。朝の挨拶を一つお願いします。"
+        elif mode == "goodnight":
+            target_date = date.today()
+            weekday = self._WEEKDAY_JA[target_date.weekday()]
+            date_str = target_date.strftime("%Y年%m月%d日")
+            base_msg = f"今日は{weekday}、{date_str}です。晚安の挨拶を一つお願いします。"
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
-        user_msg = f"今日は{weekday}、{date_str}です。朝の挨拶を一つお願いします。"
+        # ── 元素池抽取 ──
+        pool_entries = self.pool_selector.select(count=2)
+        pool_context = self.pool_selector.format_context(pool_entries)
 
-        self.logger.info(f"LLM prompt: {user_msg}")
+        if pool_context:
+            user_msg = (
+                f"{base_msg}\n\n"
+                f"{pool_context}\n\n"
+                f"※ これらの要素を挨拶に自然に盛り込んでください。ただし、挨拶の主題を変えないでください。"
+            )
+            self.logger.info(f"Pool context injected: {pool_entries}")
+        else:
+            user_msg = base_msg
+            self.logger.info("Pool context is empty, proceeding without element injection")
+
+        # ── 选择 SYSTEM_PROMPT ──
+        system_prompt = (
+            self.system_prompt_morning if mode == "morning"
+            else self.system_prompt_goodnight
+        )
+
+        self.logger.info(f"LLM prompt [mode={mode}]: {user_msg}")
 
         try:
             resp = requests.post(
@@ -125,7 +187,7 @@ class LLMProvider:
                 json={
                     "model": self.model,
                     "messages": [
-                        {"role": "system", "content": self.system_prompt},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_msg},
                     ],
                     "temperature": 0.9,

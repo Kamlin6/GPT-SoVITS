@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-main.py — Sprint 3: 重构后的入口 + SCP 上传
+main.py — Sprint 7: 早安/晚安 TTS 入口
+
+支持 mode 参数（morning/goodnight），按 mode 命名音频文件。
 
 Run from GPT-SoVITS root:
     python Custom/projects/morning/mac/main.py
+    python Custom/projects/morning/mac/main.py --mode goodnight
 """
 
+import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,12 +28,16 @@ from Custom.projects.morning.core.setup import setup
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Morning/Goodnight TTS Pipeline")
+    parser.add_argument("--mode", choices=["morning", "goodnight"], default="morning")
+    args = parser.parse_args()
+
     runtime = setup(str(CONFIG_PATH), ROOT)
-    runtime.logger.info("Morning pipeline starting")
+    runtime.logger.info(f"Pipeline starting: mode={args.mode}")
 
     # LLM 生成 → 失败时降级到模板池
     try:
-        text, lang = runtime.llm.generate()
+        text, lang = runtime.llm.generate(mode=args.mode)
     except Exception as e:
         runtime.logger.error(f"LLM generation failed: {e}, falling back to text provider")
         text, lang = runtime.text_provider.pick()
@@ -39,12 +47,12 @@ def main():
 
     sr, audio = runtime.tts_engine.generate(text, lang)
 
-    # ── 保存音频 ──
+    # ── 保存音频（按 mode 命名）──
     import soundfile as sf
     out_dir = Path(runtime.config.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    wav_path = out_dir / f"morning_{timestamp}.wav"
+    wav_path = out_dir / f"{args.mode}_{timestamp}.wav"
     sf.write(str(wav_path), audio, sr)
     runtime.logger.info(f"Saved: {wav_path}")
 

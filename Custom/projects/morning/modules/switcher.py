@@ -40,10 +40,21 @@ class Switcher:
                 self.logger.error(f"[{ch}] delivery failed: {e}")
 
     def _to_icloud(self, wav_path: Path, *_):
-        icloud_dir = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/morning"
-        icloud_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(wav_path, icloud_dir / f"morning_{wav_path.stem}.wav")
-        self.logger.info(f"[icloud] copied to {icloud_dir}")
+        icloud_base = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/civilight/morning"
+        old_base = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/morning"
+
+        # Ab-004: 提醒旧路径不再使用
+        if old_base.exists():
+            self.logger.info(f"旧 iCloud 路径 {old_base} 已不再使用，新路径为 {icloud_base}")
+
+        if wav_path.name.startswith("goodnight_"):
+            target_dir = icloud_base / "goodnight"
+        else:
+            target_dir = icloud_base
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(wav_path, target_dir / wav_path.name)
+        self.logger.info(f"[icloud] copied to {target_dir}")
 
     def _to_scp(self, wav_path: Path, text: str, _, date_str: str):
         self.relay.send_scp(wav_path, text, self.relay.config, date_str)

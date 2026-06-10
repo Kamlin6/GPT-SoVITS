@@ -75,6 +75,7 @@ def setup(config_path: str, root: Path) -> Runtime:
         model=config.llm_model,
         api_base=config.llm_api_base,
         voice_lines_path=root / "Custom" / "characters" / "CIVILIGHT" / "corpus" / "voice_lines_jp.txt",
+        pools_db_path=root / "Custom" / "characters" / "pools" / "civilight.db",
         logger=app_logger,
     )
     llm = LLMProvider(llm_cfg)
